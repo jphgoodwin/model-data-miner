@@ -26,8 +26,7 @@ def mine(direpath):
             since=(datetime.now() - timedelta(days=30)),
             only_modifications_with_file_types=['.c']).traverse_commits():
         total += 1
-        if (not re.search("[\s^][fF]ix", commit.msg) and
-                not re.search("[\s^][bB]ug", commit.msg)):
+        if (not re.search("[\s^][fF]ix|[\s^][bB]ug", commit.msg)):
             continue
         for mod in commit.modifications:
             if (mod.change_type == ModificationType.MODIFY and
