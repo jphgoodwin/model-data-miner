@@ -3,6 +3,8 @@ from pydriller.domain.commit import ModificationType
 from datetime import datetime, timedelta
 import os
 import re
+import pandas as pd
+from pycparser import c_parser
 
 def createDirectories():
     dslist = os.listdir("./datasets")
@@ -22,8 +24,10 @@ def createDirectories():
 def mine(direpath):
     total = 0
     remaining = 0
+    count = 0
+    dflist = []
     for commit in RepositoryMining('https://github.com/curl/curl',
-            since=(datetime.now() - timedelta(days=30)),
+            since=(datetime.now() - timedelta(days=1095)),
             only_modifications_with_file_types=['.c']).traverse_commits():
         total += 1
         if (not re.search("[\s^][fF]ix|[\s^][bB]ug", commit.msg)):
@@ -43,13 +47,37 @@ def mine(direpath):
                 fbug.write(mod.source_code_before)
                 fbug.close()
 
+                dflist.append(pd.DataFrame([[count, mod.source_code_before, 0]],
+                        columns=["id", "code", "label"]))
+                count += 1
+
                 ffix = open("{0}/not-bug/example#{1}.c".format(direpath, remaining),
                         "w")
                 ffix.write(mod.source_code)
                 ffix.close()
-
+                dflist.append(pd.DataFrame([[count, mod.source_code, 1]],
+                        columns=["id", "code", "label"]))
+                count += 1
+    
+    pd.concat(dflist, ignore_index=True).to_pickle("{0}/examples.pkl".format(direpath))
 
     print("total: {0}, remaining: {1}".format(total, remaining))
 
-direpath = createDirectories()
-mine(direpath)
+def readPickle(direpath):
+    df = pd.read_pickle("{0}/examples.pkl".format(direpath))
+    print(df.iloc[0]["code"])
+    # print(df)
+    return df
+
+def parseCode(df):
+    parser = c_parser.CParser()
+    ast = parser.parse(df.iloc[0]["code"])
+    print(ast)
+
+# direpath = createDirectories()
+# mine(direpath)
+# readPickle(direpath)
+df = readPickle("./datasets/dataset#4")
+
+parseCode(df)
+
