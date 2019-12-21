@@ -5,6 +5,7 @@ import os
 import re
 import pandas as pd
 from pycparser import c_parser
+import tempfile
 
 def createDirectories():
     dslist = os.listdir("./datasets")
@@ -26,9 +27,12 @@ def mine(direpath):
     remaining = 0
     count = 0
     dflist = []
-    for commit in RepositoryMining('https://github.com/curl/curl',
-            since=(datetime.now() - timedelta(days=1095)),
-            only_modifications_with_file_types=['.c']).traverse_commits():
+    temp_dir = tempfile.TemporaryDirectory()
+    url = 'https://github.com/curl/curl'
+    for commit in RepositoryMining(url,
+            since=(datetime.now() - timedelta(days=10)),
+            only_modifications_with_file_types=['.c'],
+            clone_repo_to=temp_dir.name).traverse_commits():
         total += 1
         if (not re.search("[\s^][fF]ix|[\s^][bB]ug", commit.msg)):
             continue
@@ -41,6 +45,10 @@ def mine(direpath):
                 print(mod.new_path)
                 print("Number of LOC: {0}".format(mod.nloc), "\n",
                       "Token count: {0}".format(mod.token_count))
+                file_path = os.path.join(temp_dir.name,
+                        RepositoryMining._get_repo_name_from_url(url),
+                        mod.new_path)
+                print(os.path.isfile(file_path))
 
                 fbug = open("{0}/bug/example#{1}.c".format(direpath, remaining),
                         "w")
@@ -58,6 +66,9 @@ def mine(direpath):
                 dflist.append(pd.DataFrame([[count, mod.source_code, 1]],
                         columns=["id", "code", "label"]))
                 count += 1
+
+    print(os.listdir(os.path.join(temp_dir.name,
+        RepositoryMining._get_repo_name_from_url(url))))
     
     pd.concat(dflist, ignore_index=True).to_pickle("{0}/examples.pkl".format(direpath))
 
@@ -65,8 +76,8 @@ def mine(direpath):
 
 def readPickle(direpath):
     df = pd.read_pickle("{0}/examples.pkl".format(direpath))
-    print(df.iloc[0]["code"])
-    # print(df)
+    # print(df.iloc[0]["code"])
+    print(df)
     return df
 
 def parseCode(df):
@@ -74,10 +85,10 @@ def parseCode(df):
     ast = parser.parse(df.iloc[0]["code"])
     print(ast)
 
-# direpath = createDirectories()
-# mine(direpath)
-# readPickle(direpath)
-df = readPickle("./datasets/dataset#4")
+direpath = createDirectories()
+mine(direpath)
+readPickle(direpath)
+# df = readPickle("./datasets/dataset#4")
 
-parseCode(df)
+# parseCode(df)
 
