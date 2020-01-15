@@ -6,6 +6,7 @@ import re
 import pandas as pd
 from pycparser import c_parser
 import tempfile
+import subprocess
 
 def createDirectories():
     dslist = os.listdir("./datasets")
@@ -23,8 +24,9 @@ def createDirectories():
 
 
 def mine(direpath):
-    total = 0
-    remaining = 0
+    totalCommits = 0
+    remainingCommits = 0
+    numMods = 0
     count = 0
     dflist = []
     temp_dir = tempfile.TemporaryDirectory()
@@ -33,46 +35,62 @@ def mine(direpath):
             since=(datetime.now() - timedelta(days=10)),
             only_modifications_with_file_types=['.c'],
             clone_repo_to=temp_dir.name).traverse_commits():
-        total += 1
+        totalCommits += 1
         if (not re.search("[\s^][fF]ix|[\s^][bB]ug", commit.msg)):
             continue
+        first = True
         for mod in commit.modifications:
             if (mod.change_type == ModificationType.MODIFY and
                     mod.new_path[-2:] == ".c" and
                     mod.nloc <= 1000):
-                remaining += 1
-                print(commit.msg)
-                print(mod.new_path)
-                print("Number of LOC: {0}".format(mod.nloc), "\n",
-                      "Token count: {0}".format(mod.token_count))
-                file_path = os.path.join(temp_dir.name,
-                        RepositoryMining._get_repo_name_from_url(url),
-                        mod.new_path)
-                print(os.path.isfile(file_path))
+                numMods += 1
+                if (first):
+                    remainingCommits += 1
+                    first = False
+                # print(commit.msg)
+                # print(mod.new_path)
+                # print("Number of LOC: {0}".format(mod.nloc), "\n",
+                #       "Token count: {0}".format(mod.token_count))
+                root_path = os.path.join(temp_dir.name, RepositoryMining._get_repo_name_from_url(url))
+                file_path = os.path.join(root_path, mod.new_path)
+                # print(os.path.isfile(file_path))
 
-                fbug = open("{0}/bug/example#{1}.c".format(direpath, remaining),
-                        "w")
-                fbug.write(mod.source_code_before)
-                fbug.close()
+                args = ["gcc", "-E", file_path]
 
-                dflist.append(pd.DataFrame([[count, mod.source_code_before, 0]],
-                        columns=["id", "code", "label"]))
+                for root, dirs, files in os.walk(root_path):
+                    for dirname in dirs:
+                        args.append("-I{0}".format(os.path.join(root, dirname)))
+
+                print(args)
+                result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                print(result.stdout)
+                print(result.returncode)
+
+                # fbug = open("{0}/bug/example#{1}.c".format(direpath, numMods),
+                #         "w")
+                # fbug.write(mod.source_code_before)
+                # fbug.close()
+
+                # dflist.append(pd.DataFrame([[count, mod.source_code_before, 0]],
+                #         columns=["id", "code", "label"]))
                 count += 1
 
-                ffix = open("{0}/not-bug/example#{1}.c".format(direpath, remaining),
-                        "w")
-                ffix.write(mod.source_code)
-                ffix.close()
-                dflist.append(pd.DataFrame([[count, mod.source_code, 1]],
-                        columns=["id", "code", "label"]))
+                # ffix = open("{0}/not-bug/example#{1}.c".format(direpath, numMods),
+                #         "w")
+                # ffix.write(mod.source_code)
+                # ffix.close()
+                # dflist.append(pd.DataFrame([[count, mod.source_code, 1]],
+                #         columns=["id", "code", "label"]))
                 count += 1
 
-    print(os.listdir(os.path.join(temp_dir.name,
-        RepositoryMining._get_repo_name_from_url(url))))
+        break
+
+        # print(os.listdir(os.path.join(temp_dir.name,
+        #     RepositoryMining._get_repo_name_from_url(url))))
     
-    pd.concat(dflist, ignore_index=True).to_pickle("{0}/examples.pkl".format(direpath))
+    # pd.concat(dflist, ignore_index=True).to_pickle("{0}/examples.pkl".format(direpath))
 
-    print("total: {0}, remaining: {1}".format(total, remaining))
+    print("total: {0}, remaining: {1}".format(totalCommits, remainingCommits))
 
 def readPickle(direpath):
     df = pd.read_pickle("{0}/examples.pkl".format(direpath))
@@ -85,10 +103,13 @@ def parseCode(df):
     ast = parser.parse(df.iloc[0]["code"])
     print(ast)
 
-direpath = createDirectories()
+# direpath = createDirectories()
+direpath = ""
 mine(direpath)
-readPickle(direpath)
+# readPickle(direpath)
 # df = readPickle("./datasets/dataset#4")
+
+# subprocess.run("gcc -E {0}".format(df.iloc[0]["code"]))
 
 # parseCode(df)
 
