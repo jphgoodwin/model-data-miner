@@ -55,40 +55,56 @@ def mine(direpath):
                 file_path = os.path.join(root_path, mod.new_path)
                 # print(os.path.isfile(file_path))
 
-                args = ["gcc", "-E", file_path]
+                # Preprocess file post-commit.
+                args = ["gcc", "-nostdinc", "-E", file_path, "-Ipycparser/utils/fake_libc_include"]
 
                 for root, dirs, files in os.walk(root_path):
                     for dirname in dirs:
                         args.append("-I{0}".format(os.path.join(root, dirname)))
 
-                print(args)
-                result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                print(result.stdout)
-                print(result.returncode)
+                result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-                # fbug = open("{0}/bug/example#{1}.c".format(direpath, numMods),
-                #         "w")
-                # fbug.write(mod.source_code_before)
-                # fbug.close()
+                if (result.returncode != 0):
+                    print(result.returncode)
+                    print("STDERR: {0}".format(result.stderr))
+                    break
 
-                # dflist.append(pd.DataFrame([[count, mod.source_code_before, 0]],
-                #         columns=["id", "code", "label"]))
+                ffix = open("{0}/not-bug/example#{1}.c".format(direpath, numMods),
+                        "bw")
+                ffix.write(result.stdout)
+                ffix.close()
+                dflist.append(pd.DataFrame([[count, result.stdout.decode("ascii"), 1]],
+                        columns=["id", "code", "label"]))
                 count += 1
 
-                # ffix = open("{0}/not-bug/example#{1}.c".format(direpath, numMods),
-                #         "w")
-                # ffix.write(mod.source_code)
-                # ffix.close()
-                # dflist.append(pd.DataFrame([[count, mod.source_code, 1]],
-                #         columns=["id", "code", "label"]))
+                # Open in write mode and write pre-commit text to file.
+                f = open(file_path, "w")
+                f.write(mod.source_code_before)
+                f.close()
+
+                # Preprocess file pre-commit.
+                result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+                if (result.returncode != 0):
+                    print(result.returncode)
+                    print("STDERR: {0}".format(result.stderr))
+                    break
+
+                fbug = open("{0}/bug/example#{1}.c".format(direpath, numMods),
+                        "bw")
+                fbug.write(result.stdout)
+                fbug.close()
+                dflist.append(pd.DataFrame([[count, result.stdout.decode("ascii"), 0]],
+                        columns=["id", "code", "label"]))
                 count += 1
 
-        break
+        if (not first):
+            break
 
         # print(os.listdir(os.path.join(temp_dir.name,
         #     RepositoryMining._get_repo_name_from_url(url))))
     
-    # pd.concat(dflist, ignore_index=True).to_pickle("{0}/examples.pkl".format(direpath))
+    pd.concat(dflist, ignore_index=True).to_pickle("{0}/examples.pkl".format(direpath))
 
     print("total: {0}, remaining: {1}".format(totalCommits, remainingCommits))
 
@@ -103,13 +119,11 @@ def parseCode(df):
     ast = parser.parse(df.iloc[0]["code"])
     print(ast)
 
-# direpath = createDirectories()
-direpath = ""
+direpath = createDirectories()
+# direpath = ""
 mine(direpath)
-# readPickle(direpath)
+df = readPickle(direpath)
 # df = readPickle("./datasets/dataset#4")
 
-# subprocess.run("gcc -E {0}".format(df.iloc[0]["code"]))
-
-# parseCode(df)
+parseCode(df)
 
